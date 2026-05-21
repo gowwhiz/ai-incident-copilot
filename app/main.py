@@ -1,23 +1,28 @@
+from contextlib import asynccontextmanager
+from collections.abc import AsyncIterator
+
 from fastapi import FastAPI
-from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from app.core.config import get_settings
+from app.db.session import Base, engine
+from app.models.incident import Incident  # noqa: F401 - imported so SQLAlchemy registers the model
 
 
-class Settings(BaseSettings):
-    """Application configuration loaded from environment variables."""
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    """Initialize application resources when the API starts."""
 
-    app_name: str = "AI Incident Copilot"
-    app_env: str = "local"
-    log_level: str = "INFO"
-
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    Base.metadata.create_all(bind=engine)
+    yield
 
 
-settings = Settings()
+settings = get_settings()
 
 app = FastAPI(
     title=settings.app_name,
     description="AI-assisted incident response backend for production support workflows.",
-    version="0.1.0",
+    version="0.2.0",
+    lifespan=lifespan,
 )
 
 
@@ -29,4 +34,5 @@ def health_check() -> dict[str, str]:
         "status": "ok",
         "service": settings.app_name,
         "environment": settings.app_env,
+        "database": "configured",
     }
