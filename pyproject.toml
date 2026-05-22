@@ -1,16 +1,10 @@
-[project]
-name = "ai-incident-copilot"
-version = "0.1.0"
-description = "AI-assisted incident response backend built with FastAPI"
-readme = "README.md"
-requires-python = ">=3.12,<3.14"
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
 
 [tool.ruff]
 line-length = 100
+target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-pythonpath = ["."]

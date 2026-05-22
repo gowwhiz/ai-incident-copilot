@@ -1,41 +1,50 @@
-from typing import Annotated
-
-from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import Select, select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.incident import Incident
 from app.schemas.incident import AlertIn, IncidentOut, ResolveIncidentIn
+from app.services.ai_analyzer import analyze_incident
 from app.services.fingerprint import generate_alert_fingerprint
+from app.services.log_search import search_related_logs
+from app.services.runbook_store import get_runbook_for_service
 
 router = APIRouter(prefix="/incidents", tags=["incidents"])
 
-DbSession = Annotated[Session, Depends(get_db)]
 
-
-@router.post("/ingest", response_model=IncidentOut, status_code=status.HTTP_201_CREATED)
-def ingest_alert(alert: AlertIn, db: DbSession) -> Incident:
-    """Create a new incident from an incoming alert or return the existing duplicate."""
-
-    alert_fingerprint = generate_alert_fingerprint(alert)
+@router.post("/ingest", response_model=IncidentOut, status_code=201)
+def ingest_alert(alert: AlertIn, db: Session = Depends(get_db)) -> Incident:
+    fingerprint = generate_alert_fingerprint(alert)
 
     existing_incident = db.scalar(
-        select(Incident).where(Incident.alert_fingerprint == alert_fingerprint)
+        select(Incident).where(Incident.alert_fingerprint == fingerprint)
     )
-    if existing_incident:
+
+    if existing_incident is not None:
         return existing_incident
+
+    related_logs = search_related_logs(
+        service=alert.service,
+        environment=alert.environment,
+        metadata=alert.metadata,
+    )
+    runbook = get_runbook_for_service(alert.service)
+    analysis = analyze_incident(alert=alert, logs=related_logs, runbook=runbook)
 
     incident = Incident(
         title=alert.title,
         service=alert.service,
         severity=alert.severity,
-        status="open",
         source=alert.source,
         environment=alert.environment,
-        alert_fingerprint=alert_fingerprint,
         description=alert.description,
         raw_payload=alert.metadata,
+        alert_fingerprint=fingerprint,
+        symptoms=analysis.symptoms,
+        probable_cause=analysis.probable_cause,
+        recommended_actions=analysis.recommended_actions,
+        postmortem_summary=analysis.postmortem_summary,
     )
 
     db.add(incident)
@@ -47,39 +56,25 @@ def ingest_alert(alert: AlertIn, db: DbSession) -> Incident:
 
 @router.get("", response_model=list[IncidentOut])
 def list_incidents(
-    db: DbSession,
-    service: Annotated[str | None, Query(max_length=120)] = None,
-    severity: Annotated[str | None, Query(max_length=40)] = None,
-    status_filter: Annotated[str | None, Query(alias="status", max_length=40)] = None,
-    limit: Annotated[int, Query(ge=1, le=100)] = 25,
-    offset: Annotated[int, Query(ge=0)] = 0,
+    db: Session = Depends(get_db),
+    limit: int = Query(default=50, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
 ) -> list[Incident]:
-    """List incidents with optional filters for service, severity, and status."""
-
-    query: Select[tuple[Incident]] = select(Incident)
-
-    if service:
-        query = query.where(Incident.service == service)
-    if severity:
-        query = query.where(Incident.severity == severity)
-    if status_filter:
-        query = query.where(Incident.status == status_filter)
-
-    query = query.order_by(Incident.created_at.desc()).limit(limit).offset(offset)
-
-    return list(db.scalars(query).all())
+    statement = (
+        select(Incident)
+        .order_by(Incident.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(db.scalars(statement).all())
 
 
 @router.get("/{incident_id}", response_model=IncidentOut)
-def get_incident(incident_id: int, db: DbSession) -> Incident:
-    """Return one incident by ID."""
-
+def get_incident(incident_id: int, db: Session = Depends(get_db)) -> Incident:
     incident = db.get(Incident, incident_id)
-    if not incident:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Incident not found",
-        )
+
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
 
     return incident
 
@@ -88,16 +83,12 @@ def get_incident(incident_id: int, db: DbSession) -> Incident:
 def resolve_incident(
     incident_id: int,
     payload: ResolveIncidentIn,
-    db: DbSession,
+    db: Session = Depends(get_db),
 ) -> Incident:
-    """Mark an incident as resolved and store the resolution notes."""
-
     incident = db.get(Incident, incident_id)
-    if not incident:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Incident not found",
-        )
+
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
 
     incident.status = "resolved"
     incident.resolution_summary = payload.resolution_summary

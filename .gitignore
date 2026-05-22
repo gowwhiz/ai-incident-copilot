@@ -1,28 +1,7 @@
-# Python
-__pycache__/
-*.py[cod]
-*.pyo
-*.pyd
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
-.coverage
-htmlcov/
-
-# Virtual environments
 .venv/
-venv/
-env/
-
-# Environment variables
 .env
-
-# Local databases and generated files
-*.db
+__pycache__/
+.pytest_cache/
+*.pyc
 incident_copilot.db
-
-# OS/editor files
 .DS_Store
-Thumbs.db
-.vscode/
-.idea/

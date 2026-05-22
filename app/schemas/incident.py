@@ -3,13 +3,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+
 Severity = Literal["low", "medium", "high", "critical"]
 IncidentStatus = Literal["open", "investigating", "resolved"]
 
 
 class AlertIn(BaseModel):
-    """Incoming alert payload received by the incident copilot."""
-
     title: str = Field(..., min_length=3, max_length=255)
     service: str = Field(..., min_length=2, max_length=120)
     severity: Severity = "medium"
@@ -20,10 +19,6 @@ class AlertIn(BaseModel):
 
 
 class IncidentOut(BaseModel):
-    """API response model for incidents stored in the system."""
-
-    model_config = ConfigDict(from_attributes=True)
-
     id: int
     title: str
     service: str
@@ -41,8 +36,8 @@ class IncidentOut(BaseModel):
     created_at: datetime
     updated_at: datetime
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 class ResolveIncidentIn(BaseModel):
-    """Payload used later when marking an incident as resolved."""
-
     resolution_summary: str = Field(..., min_length=5)

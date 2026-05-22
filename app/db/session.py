@@ -27,8 +27,6 @@ SessionLocal = sessionmaker(
 
 
 def get_db() -> Generator[Session, None, None]:
-    """Yield a database session for one request or unit of work."""
-
     db = SessionLocal()
     try:
         yield db
