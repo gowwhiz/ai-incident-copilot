@@ -5,6 +5,7 @@ from fastapi import FastAPI
 
 from app.core.config import get_settings
 from app.db.session import Base, engine
+from app.api.incidents import router as incidents_router
 from app.models.incident import Incident  # noqa: F401 - imported so SQLAlchemy registers the model
 
 
@@ -21,9 +22,11 @@ settings = get_settings()
 app = FastAPI(
     title=settings.app_name,
     description="AI-assisted incident response backend for production support workflows.",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
+
+app.include_router(incidents_router)
 
 
 @app.get("/health", tags=["system"])
