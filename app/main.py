@@ -19,7 +19,7 @@ settings = get_settings()
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.4.0",
+    version="0.5.0",
     description="AI-assisted incident triage and root-cause analysis service.",
     lifespan=lifespan,
 )

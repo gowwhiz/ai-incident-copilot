@@ -1,0 +1,10 @@
+services:
+  api:
+    build: .
+    container_name: ai-incident-copilot-api
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./incident_copilot.db:/app/incident_copilot.db
