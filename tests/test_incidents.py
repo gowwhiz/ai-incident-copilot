@@ -92,7 +92,9 @@ def test_resolve_incident_updates_status_and_summary() -> None:
     resolve_response = client.post(
         f"/incidents/{incident_id}/resolve",
         json={
-            "resolution_summary": "Rotated the failing signing key and confirmed login errors returned to baseline."
+            "resolution_summary": (
+                "Rotated the failing signing key and confirmed login errors returned to baseline."
+            )
         },
     )
 
@@ -100,3 +102,44 @@ def test_resolve_incident_updates_status_and_summary() -> None:
     data = resolve_response.json()
     assert data["status"] == "resolved"
     assert "signing key" in data["resolution_summary"]
+
+
+
+def test_escalate_incident_creates_collaboration_actions() -> None:
+    reset_database()
+
+    ingest_response = client.post(
+        "/incidents/ingest",
+        json={
+            "title": "Checkout API latency spike",
+            "service": "checkout-api",
+            "severity": "high",
+            "source": "datadog",
+            "environment": "production",
+            "description": "P95 latency exceeded threshold for 10 minutes",
+            "metadata": {"region": "us-east-1", "team": "payments"},
+        },
+    )
+    incident_id = ingest_response.json()["id"]
+
+    escalate_response = client.post(
+        f"/incidents/{incident_id}/escalate",
+        json={
+            "slack_channel": "#sev-response",
+            "jira_project_key": "INC",
+            "note": "Escalating after sustained customer-impacting latency.",
+        },
+    )
+
+    assert escalate_response.status_code == 200
+    data = escalate_response.json()
+    assert data["incident"]["status"] == "investigating"
+    assert len(data["actions"]) == 2
+    assert {action["action_type"] for action in data["actions"]} == {
+        "slack_notification",
+        "jira_ticket",
+    }
+
+    actions_response = client.get(f"/incidents/{incident_id}/actions")
+    assert actions_response.status_code == 200
+    assert len(actions_response.json()) == 2

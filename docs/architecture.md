@@ -56,3 +56,28 @@ This repo intentionally uses local-friendly mocks. In a production version, the 
 ## Why this design works
 
 The API does not directly know how logs, runbooks, or AI analysis are implemented. Each concern lives in its own module, which keeps the code testable and makes future integrations easier to add.
+
+## Commit 6: Escalation and Collaboration Layer
+
+The system now includes a collaboration layer that simulates the actions an incident copilot would take after triage:
+
+```mermaid
+flowchart TD
+    A[Incident] --> B[Escalation API]
+    B --> C[Mock Slack Notifier]
+    B --> D[Mock Jira Client]
+    C --> E[Incident Action Audit Log]
+    D --> E
+```
+
+### Why this matters
+
+Real incident platforms do more than analyze alerts. They also coordinate response work. This commit adds that workflow while keeping external integrations mocked so the project remains easy to run locally and test in CI.
+
+### Extension points
+
+- Replace `MockSlackNotifier` with Slack Web API calls.
+- Replace `MockJiraClient` with Jira REST API ticket creation.
+- Add PagerDuty/Opsgenie escalation policies.
+- Add webhook retries and a dead-letter queue for failed outbound actions.
+- Add role-based permissions around who can escalate or resolve incidents.

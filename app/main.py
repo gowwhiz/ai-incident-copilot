@@ -7,6 +7,7 @@ from app.api.incidents import router as incidents_router
 from app.core.config import get_settings
 from app.db.session import Base, engine
 from app.models.incident import Incident  # noqa: F401 - imported so SQLAlchemy registers the model
+from app.models.incident_action import IncidentAction  # noqa: F401
 
 
 @asynccontextmanager
@@ -19,7 +20,7 @@ settings = get_settings()
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.5.0",
+    version="0.6.0",
     description="AI-assisted incident triage and root-cause analysis service.",
     lifespan=lifespan,
 )

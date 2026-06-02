@@ -4,8 +4,17 @@ from sqlalchemy.orm import Session
 
 from app.db.session import get_db
 from app.models.incident import Incident
-from app.schemas.incident import AlertIn, IncidentOut, ResolveIncidentIn
+from app.models.incident_action import IncidentAction
+from app.schemas.incident import (
+    AlertIn,
+    EscalateIncidentIn,
+    EscalationOut,
+    IncidentActionOut,
+    IncidentOut,
+    ResolveIncidentIn,
+)
 from app.services.ai_analyzer import analyze_incident
+from app.services.collaboration import MockJiraClient, MockSlackNotifier
 from app.services.fingerprint import generate_alert_fingerprint
 from app.services.log_search import search_related_logs
 from app.services.runbook_store import get_runbook_for_service
@@ -98,3 +107,66 @@ def resolve_incident(
     db.refresh(incident)
 
     return incident
+
+
+@router.post("/{incident_id}/escalate", response_model=EscalationOut)
+def escalate_incident(
+    incident_id: int,
+    payload: EscalateIncidentIn,
+    db: Session = Depends(get_db),
+) -> EscalationOut:
+    incident = db.get(Incident, incident_id)
+
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    slack_result = MockSlackNotifier().send_incident_alert(
+        incident=incident,
+        channel=payload.slack_channel,
+        note=payload.note,
+    )
+    jira_result = MockJiraClient().create_incident_ticket(
+        incident=incident,
+        project_key=payload.jira_project_key.upper(),
+    )
+
+    actions = [
+        IncidentAction(
+            incident_id=incident.id,
+            action_type=result.action_type,
+            destination=result.destination,
+            external_reference=result.external_reference,
+            summary=result.summary,
+        )
+        for result in (slack_result, jira_result)
+    ]
+
+    incident.status = "investigating" if incident.status == "open" else incident.status
+    db.add_all(actions)
+    db.add(incident)
+    db.commit()
+    db.refresh(incident)
+
+    for action in actions:
+        db.refresh(action)
+
+    return EscalationOut(incident=incident, actions=actions)
+
+
+@router.get("/{incident_id}/actions", response_model=list[IncidentActionOut])
+def list_incident_actions(
+    incident_id: int,
+    db: Session = Depends(get_db),
+) -> list[IncidentAction]:
+    incident = db.get(Incident, incident_id)
+
+    if incident is None:
+        raise HTTPException(status_code=404, detail="Incident not found")
+
+    statement = (
+        select(IncidentAction)
+        .where(IncidentAction.incident_id == incident_id)
+        .order_by(IncidentAction.created_at.desc())
+    )
+    return list(db.scalars(statement).all())
+

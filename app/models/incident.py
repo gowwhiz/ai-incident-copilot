@@ -1,9 +1,13 @@
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import JSON, DateTime, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.session import Base
+
+if TYPE_CHECKING:
+    from app.models.incident_action import IncidentAction
 
 
 class Incident(Base):
@@ -34,6 +38,12 @@ class Incident(Base):
     postmortem_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     resolution_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    actions: Mapped[list["IncidentAction"]] = relationship(
+        "IncidentAction",
+        back_populates="incident",
+        cascade="all, delete-orphan",
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
