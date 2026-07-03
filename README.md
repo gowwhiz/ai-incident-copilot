@@ -2,6 +2,7 @@
 
 AI Incident Copilot is a Python/FastAPI backend that simulates how a production-support, SRE, or platform engineering team could triage incidents faster with alert deduplication, log context, runbook context, AI-generated investigation guidance, and escalation workflows.
 
+
 ## Current stage
 
 **Commit update: Incident escalation workflow with collaboration actions**

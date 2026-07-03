@@ -5,3 +5,4 @@ __pycache__/
 *.pyc
 incident_copilot.db
 .DS_Store
+.ruff_cache/
